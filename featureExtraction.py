@@ -12,26 +12,26 @@ def extract_dicom_info(filepath):
     try:
         ds = pydicom.dcmread(filepath)
         
-        return {
+        dicom_features = {
             'SOPInstanceUID': ds.get('SOPInstanceUID', None),
             'SeriesInstanceUID': ds.get('SeriesInstanceUID', None),
             'StudyInstanceUID': ds.get('StudyInstanceUID', None),
             'PatientID': ds.get('PatientID', None),
             'Modality': ds.get('Modality', None),
-            # Spatial Information
+            
             'ImagePositionPatient': ds.get('ImagePositionPatient', None),
             'ImageOrientationPatient': ds.get('ImageOrientationPatient', None),
             'SliceLocation': ds.get('SliceLocation', None),
             'FrameOfReferenceUID': ds.get('FrameOfReferenceUID', None),
             'PositionReferenceIndicator': ds.get('PositionReferenceIndicator', None),
-            # Dimension Information
+            
             'PixelSpacing': ds.get('PixelSpacing', None),
             'SliceThickness': ds.get('SliceThickness', None),
             'SpacingBetweenSlices': ds.get('SpacingBetweenSlices', None),
             'Rows': ds.get('Rows', None),
             'Columns': ds.get('Columns', None),
             'NumberOfFrames': ds.get('NumberOfFrames', None),
-            # Pixel Data and Value Interpretation
+            
             'PixelData': ds.pixel_array,
             'BitsAllocated': ds.get('BitsAllocated', None),
             'BitsStored': ds.get('BitsStored', None),
@@ -43,7 +43,7 @@ def extract_dicom_info(filepath):
             'WindowCenter': ds.get('WindowCenter', None),
             'WindowWidth': ds.get('WindowWidth', None),
             'PhotometricInterpretation': ds.get('PhotometricInterpretation', None),
-            # Additional Information
+            
             'InstanceNumber': ds.get('InstanceNumber', None),
             'AcquisitionNumber': ds.get('AcquisitionNumber', None),
             'PatientPosition': ds.get('PatientPosition', None),
@@ -51,11 +51,14 @@ def extract_dicom_info(filepath):
             'TableHeight': ds.get('TableHeight', None),
             'GantryDetectorTilt': ds.get('GantryDetectorTilt', None),
         }
+        
+        return dicom_features
     except Exception as e:
         logging.error(f"Error reading file {filepath}: {str(e)}")
         return None
 
 def process_dicom_directory(directory):
+
     slices = defaultdict(list)
     for root, _, files in os.walk(directory):
         for filename in files:
@@ -141,34 +144,60 @@ def visualize_3d_volume(volume, metadata, normals=None):
     vmin = window_center - window_width // 2
     vmax = window_center + window_width // 2
     
-    axes[0].imshow(volume[:, :, volume.shape[2]//2], cmap='gray', vmin=vmin, vmax=vmax)
+    axes[0].imshow(volume[:, :, volume.shape[2] // 2], cmap='gray', vmin=vmin, vmax=vmax)
     axes[0].set_title('Axial')
-    
-    axes[1].imshow(volume[:, volume.shape[1]//2, :], cmap='gray', vmin=vmin, vmax=vmax)
+
+    axes[1].imshow(volume[:, volume.shape[1] // 2, :], cmap='gray', vmin=vmin, vmax=vmax)
     axes[1].set_title('Coronal')
-    
-    axes[2].imshow(volume[volume.shape[0]//2, :, :], cmap='gray', vmin=vmin, vmax=vmax)
+
+    axes[2].imshow(volume[volume.shape[0] // 2, :, :], cmap='gray', vmin=vmin, vmax=vmax)
     axes[2].set_title('Sagittal')
     
     plt.tight_layout()
-    plt.show()
     
+    fig, ax = plt.subplots()
+    ax.imshow(volume[:, :, volume.shape[2] // 2], cmap='gray', vmin=vmin, vmax=vmax)
+    ax.axis('off')  
+    ax.set_title("Axial View")
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)  
+    fig.savefig("axial.png", bbox_inches='tight', pad_inches=0.2)  
+
+    fig, ax = plt.subplots()
+    ax.imshow(volume[:, volume.shape[1] // 2, :], cmap='gray', vmin=vmin, vmax=vmax)
+    ax.axis('off')  
+    ax.set_title("Coronal View")
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)  
+    fig.savefig("coronal.png", bbox_inches='tight', pad_inches=0.2)  
+
+    fig, ax = plt.subplots()
+    ax.imshow(volume[volume.shape[0] // 2, :, :], cmap='gray', vmin=vmin, vmax=vmax)
+    ax.axis('off')
+    ax.set_title("Sagittal View")
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0)  
+    fig.savefig("sagittal.png", bbox_inches='tight', pad_inches=0.2)  
+
+    plt.close('all')  
+
     if normals is not None:
         plt.figure(figsize=(10, 10))
         plt.quiver(normals[:, :, volume.shape[2]//2, 0], normals[:, :, volume.shape[2]//2, 1], 
                    normals[:, :, volume.shape[2]//2, 2], color='red')
-        plt.title("Surface Normals (Axial View)")
-        plt.show()
+        plt.title("Surface Normals (Axial View)", fontsize=20)
+        
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)  
 
-if __name__ == "__main__":
-    # dicom_directory = '/home/matrix/Downloads/DIcom gans/Data/VOL_1'
-    dicom_directory = 'D:\\DIcom gans\\Data\\raw'
+        plt.savefig("surface_normals_axial.png", bbox_inches='tight')
+        plt.close('all')
+        
+def main(dicom_directory):
+
     logging.info("Processing DICOM files...")
     series_slices = process_dicom_directory(dicom_directory)
     
     if not series_slices:
         logging.warning("No valid DICOM files found.")
     else:
+        result = {}
         logging.info(f"Processed {len(series_slices)} series.")
         
         for series_uid, slices in series_slices.items():
@@ -190,14 +219,21 @@ if __name__ == "__main__":
             logging.info("Visualizing volume and normals...")
             visualize_3d_volume(resampled_volume, metadata, normals)
             
-            logging.info("Additional Metadata:")
+            result["Number of slices"] = len(slices)
+            result["Volume shape"] = volume.shape
+            result["Voxel size"] = voxel_size
+            result["Resampled volume shape"] = resampled_volume.shape
+            
+            logging.info("All Extracted DICOM Features:")
             for key, value in metadata.items():
+                result[str(key)] = value
                 logging.info(f"{key}: {value}")
-            
-            logging.info("Derived Information:")
-            logging.info(f"Derivation Description: {metadata['DerivationDescription']}")
-            logging.info(f"Rescale Type: {metadata['RescaleType']}")
-            
-            logging.info("Additional Spatial Information:")
-            logging.info(f"Table Height: {metadata['TableHeight']}")
-            logging.info(f"Gantry/Detector Tilt: {metadata['GantryDetectorTilt']}")
+    
+        #print(result)
+        return result
+    
+    return None
+
+if __name__ == "__main__":
+    main('Data/raw')
+    
